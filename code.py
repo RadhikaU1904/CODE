@@ -1,13 +1,11 @@
 Matches
-- Text and values are readable in both reports.
-- Color contrast is clear.
-- Division headers and metric rows are aligned.
-- Long division names are visible without clipping.
-- Databricks heatmap tiles have consistent spacing.
-- Scrolling works as expected.
-- Layout remains usable at 100%, 125% and 150% zoom.
-- Headings and sections are clearly grouped.
-- Keyboard navigation and focus work correctly.
+- Page navigation works in both reports.
+- Initial load and week-filter response meet expectations.
+- Refresh timestamps match pipeline runs.
+- Error messages display correctly for unavailable results.
+- Exported values and formatting are correct where supported.
+- Geography access works as expected for tested roles.
 Differences
-- Power BI uses geographic maps; Databricks uses tiles.
-- Some Power BI map labels overlap or truncate; Databricks tile labels are clearer.
+- No issues identified during testing.
+
+See the Navigation & Performance observation in the Page Navigation row above.
