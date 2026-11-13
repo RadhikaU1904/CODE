@@ -1,11 +1,7 @@
 Matches
-- Region coverage looks complete; no missing values observed.
-- Region order is consistent across both Databricks heatmaps.
-- Tooltips display correctly.
-- Databricks tile colors follow the legend, and labels are readable.
+- Both reports state that totals include non-retail and adjustments and may not equal the sum of retail divisions.
+- No visibly missing regional values observed.
 Differences
-- Reconciliation against Power BI completed for readable regional values. Comp Sales and Comp Scripts percentages differ from Databricks, including negative-to-positive differences.
-- Power BI uses geographic maps; Databricks uses tiles.
-- Power BI region selection filters/highlights other visuals; Databricks does not support this.
-- Some Power BI labels overlap or truncate.
-- Some Databricks values fall outside the legend’s labeled range.
+- Division A is labeled “Southeast & Puerto Rico” in Power BI versus “Southeast & International” in Databricks.
+- Actual values and prior-year comparisons differ between reports, as documented in the scorecard and regional heatmap observations.
+- Databricks explicitly shows Week 41 WTD, 5 of 7 days; Power BI shows Week 41 / Current Week without the same cutoff detail.
