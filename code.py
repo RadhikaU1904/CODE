@@ -1,1 +1,1 @@
-hi this some thing 
+Division A label mismatch: Power BI shows “A – Southeast & Puerto Rico”; Databricks shows “A1 – Southeast & International.” Confirm the approved division code, label, and geographic scope. 
