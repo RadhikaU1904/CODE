@@ -1,10 +1,10 @@
-Executive Summary — KPI card differences
-KPI card / item	Power BI	Databricks
-Pharmacy Adj. Scripts — vs LY	6.4%	6.3%
-Rx Delivery GMV — actual	$78.7M	$64.2M
-Rx Delivery GMV — vs LY	87.2%	52.6%
-Rx Delivery GMV — vs LW	−1.7%	−19.8%
-Sales card titles	H&W Merch Sales / Vision Merch Sales	H&W Net Sales / Vision Net Sales
-
-
-The H&W Sales, Vision Sales and Rx Delivery Penetration card values match.
+1. Report: H&W Weekly Trade Report
+   Reporting week: 41
+   Validation date: 11/13/2026
+   Power BI data updated: 11/13/2026
+   Databricks refresh: 11/13/2026 — displayed “1 hour ago” when reviewed
+   Scope: Comparison of displayed Power BI and Databricks values.
+2. Type Executive Summary as a heading.
+3. Click the table/grid icon in the editor toolbar and insert a table with five columns. Confluence supports inserting tables from this toolbar. Atlassian Documentation
+Use this structure:
+Item / check	Power BI	Databricks	Status	Notes / retest
