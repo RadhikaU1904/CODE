@@ -1,5 +1,9 @@
-Row 62 – Total Footnote: Both reports state that totals include non-retail and adjustments and may not equal the sum of retail divisions.
-
-Row 63 – Glossary Link: Glossary navigation works in both reports. Databricks includes additional calculation details, such as explicitly excluding immunizations from RxD Penetration; Power BI does not mention this exclusion.
-
-Row 64 – Date Label: Date range and day count verified as correct. Databricks displays the date range and partial-week day count; Power BI shows Week 41 / Current Week.
+Week 41 – Sales & Volume: exceptions identified so far
+Item	Power BI	Databricks
+Excl. Rx AUR Deflation – Week Comp %	17.3%	Missing
+Excl. Rx AUR Deflation – MTD Comp %	22.2%	Missing
+GMV – Week actual	$78.7M	$64.2M
+GMV – Week growth	87.2%	52.6%
+GMV – MTD actual	$159.5M	$144.9M
+GMV – MTD growth	87.8%	70.7%
+GMV – YTD growth	196.0%	194.6%
