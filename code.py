@@ -1,10 +1,5 @@
-Matches
-- Both reports state that totals include non-retail and adjustments and may not equal the sum of retail divisions.
-- Glossary navigation works, and metric definitions are available in both reports.
-- NPS definitions are consistent.
-- Date range and day count verified as correct.
-Differences
-- Databricks includes additional calculation details and exclusions. Its RxD Penetration definition explicitly excludes immunizations; Power BI’s definition does not mention this.
-- Databricks displays the date range and partial-week day count; Power BI shows Week 41 / Current Week.
-For rows 63–64, paste:
-See the Footnotes & Definitions observation in the Total Footnote row above.
+Row 62 – Total Footnote: Both reports state that totals include non-retail and adjustments and may not equal the sum of retail divisions.
+
+Row 63 – Glossary Link: Glossary navigation works in both reports. Databricks includes additional calculation details, such as explicitly excluding immunizations from RxD Penetration; Power BI does not mention this exclusion.
+
+Row 64 – Date Label: Date range and day count verified as correct. Databricks displays the date range and partial-week day count; Power BI shows Week 41 / Current Week.
