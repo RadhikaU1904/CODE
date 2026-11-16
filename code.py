@@ -64,4 +64,18 @@ plt.show()
 
 
 
+H&W Weekly Trade Report: Power BI vs Databricks validation, Week 41 (as of Nov 16, 2026)
+
+Hi team,
+
+Attached is the Week 41 Power BI vs Databricks validation for the H&W Weekly Trade Report, as of Nov 16, 2026.
+
+98.8% of the numbers are the same in both reports (868 compared: 845 match, 13 style only, 10 no match). Last week was 98.5%.
+
+Of the 10 that do not match, 8 are the Rx Delivery top-of-funnel stages that are still being validated (ignoring for now, per Sumanth), 1 is the known Power BI issue on Store Wage per Script vs LY, and 1 is Rx Delivery Penetration pts vs LY (2.7 vs 2.80), which looks like rounding and is the only item left to investigate.
+
+The Excel has the full details by tab, and the chart shows the overall and by-tab view.
+
+Thanks,
+Radhika
 
