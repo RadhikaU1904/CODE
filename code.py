@@ -1,22 +1,28 @@
-import pdfplumber, re
-import pandas as pd
+Hi Team,
 
-path = "PASTE THE SAME PDF PATH HERE"
+Attached is the Week 42 (week to date, Nov 14 to Nov 16, 3 of 7 days) validation comparing the H&W Weekly Trade Report in Power BI and Databricks as of Nov 17, 2026.
 
-VAL = r"(?:-?\$?\d[\d,]*\.?\d*[KMB%]?(?:\s(?:Δ|pts))?|NA)"
-ROW = re.compile(rf"((?:(?<!\d)% )?[A-Za-z][A-Za-z0-9 .&()/*%-]*?)\s+((?:{VAL}(?:\s+|$)){{2,}})$")
+Overall, 98.6% of metrics are aligned between the two reports, with 868 metrics compared:
 
-rows = []
-with pdfplumber.open(path) as pdf:
-    for p, page in enumerate(pdf.pages, 1):
-        text = page.dedupe_chars().extract_text() or ""
-        for line in text.splitlines():
-            m = ROW.search(line.strip())
-            if m:
-                vals = re.findall(VAL, m.group(2))
-                rows.append({"page": p, "row name": m.group(1).strip(),
-                             "how many": len(vals), "numbers": " | ".join(vals)})
+- 843 Matches
+- 13 Style/formatting differences only
+- 12 Mismatches
 
-df = pd.DataFrame(rows)
-print(df.groupby("page").size())
-display(df)
+[Paste the chart image here]
+
+This is slightly below yesterday's 98.8% match rate (Week 41), because of two new small differences.
+
+Of the 12 mismatches:
+
+- 8 are related to the Rx Delivery top-of-funnel stages that are currently under validation and are set aside for now, per Sumanth.
+- 1 is the known Power BI issue for Store Wage per Script vs LY (-10.03% vs -5.15%).
+- 1 is Rx Delivery Penetration pts vs LY on the Executive Summary card (2.9 vs 2.82). Power BI shows 2.9 for the same metric on its Sales & Volume page, so this appears to be a rounding/display difference on the Power BI card.
+- 1 is new: New RxD Patient, MTD (101.2K vs 101.3K), which looks like a rounding or timing difference.
+- 1 is new: Vision Merch Sales vs LY for BU O (NA vs 0.0%), where the actual is only $529 in both reports.
+
+The last three are the items requiring investigation.
+
+The attached Excel file contains the detailed validation results by report tab, along with the summary chart and match percentages by tab.
+
+Thanks,
+Radhika
