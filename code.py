@@ -1,9 +1,7 @@
-dbx = spark.sql("""
-  SELECT visual_id, row_order, row_label, col_sort, col_key,
-         geo_id, geo_name, period_week_label, cell_text, metric_status
-  FROM `wmt-hnw-pharmacy-catalog-prod`.trade_deck.v_slide_cells_display
-  WHERE week_choice = 'Latest'
-""")
-print("Total cells:", dbx.count())
-display(dbx.groupBy("visual_id").count().orderBy("visual_id"))
-display(dbx.filter("visual_id = 'p1_net_sales'").orderBy("row_order", "col_sort"))
+# 1) how Databricks stores the KPI cards
+kpi = dbx[dbx["visual_id"] == "p6_kpi_cards"].sort_values(["row_label", "col_sort"])
+print("KPI cells:", len(kpi))
+display(spark.createDataFrame(kpi[["row_label", "col_key", "geo_name", "cell_text"]].astype(str)))
+
+# 2) how the Power BI PDF writes the Executive Summary page
+print(pages[5][:2500])
