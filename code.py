@@ -1,12 +1,13 @@
-import json
-from databricks.sdk import WorkspaceClient
+def sql_of(d):
+    return d.get("query") or " ".join(d.get("queryLines", []))
 
-w = WorkspaceClient()
-dash = w.lakeview.get("01f1dfc589f217e6b9155a2e5a8cd34b")   # the ID from your dashboard URL
-spec = json.loads(dash.serialized_dashboard)
+# 1) show the SQL of the first two datasets
+for d in spec["datasets"][:2]:
+    print("=====", d.get("displayName"), "=====")
+    print(sql_of(d))
+    print()
 
-print("Dashboard:", dash.display_name)
-print("Datasets found:", len(spec.get("datasets", [])))
-for d in spec.get("datasets", []):
-    q = d.get("query") or " ".join(d.get("queryLines", []))
-    print("-", d.get("displayName"), "|", len(q), "characters of SQL")
+# 2) try running the first one (Net Sales)
+df = spark.sql(sql_of(spec["datasets"][0]))
+print("Rows:", df.count(), "| Columns:", df.columns)
+display(df)
