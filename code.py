@@ -1,7 +1,17 @@
+PBI_PDF = "PASTE TODAY'S POWER BI PDF PATH"
+
 # 1) how Databricks stores the KPI cards
-kpi = dbx[dbx["visual_id"] == "p6_kpi_cards"].sort_values(["row_label", "col_sort"])
-print("KPI cells:", len(kpi))
-display(spark.createDataFrame(kpi[["row_label", "col_key", "geo_name", "cell_text"]].astype(str)))
+kpi = spark.sql("""
+  SELECT row_order, row_label, col_sort, col_key, geo_name, cell_text
+  FROM `wmt-hnw-pharmacy-catalog-prod`.trade_deck.v_slide_cells_display
+  WHERE week_choice = 'Latest' AND visual_id = 'p6_kpi_cards'
+  ORDER BY row_order, col_sort
+""")
+print("KPI cells:", kpi.count())
+display(kpi)
 
 # 2) how the Power BI PDF writes the Executive Summary page
-print(pages[5][:2500])
+import pdfplumber
+with pdfplumber.open(PBI_PDF) as pdf:
+    print("Pages:", len(pdf.pages))
+    print(pdf.pages[5].dedupe_chars().extract_text()[:2500])
