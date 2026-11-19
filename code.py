@@ -1,14 +1,8 @@
-bad = res[res["Match?"] != "Match"]
-print(bad[bad.visual_id == "p4_rxd_funnel"][["row", "column", "Databricks", "Power BI", "Match?"]].to_string())
+path = "PASTE YOUR DATABRICKS PDF PATH"   # the same /Workspace/... path as before
 
-for v in ["p3_geography", "p4_rxd_geography", "p2_vision_category", "p1_digital", "p4_rxd_funnel"]:
-    d = dbx[dbx.visual_id == v]
-    print("\n", v, "\n rows:", list(d.row_label.unique()), "\n geos:", list(d.geo_name.astype(str).unique()))
+with open(path, "rb") as f:
+    data = f.read()
 
-for p in [1, 2, 3, 4]:
-    print("\n--- Power BI page", p)
-    for r in pbi_rows:
-        if r["page"] == p:
-            print(len(r["vals"]), "|", r["name"], "|", " ".join(r["vals"][:5]))
-
-print(pages[2][:1500])
+df = (spark.createDataFrame([(bytearray(data),)], "content binary")
+      .selectExpr("ai_parse_document(content, map('version','2.0')) AS parsed"))
+display(df)
