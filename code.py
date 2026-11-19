@@ -1,13 +1,9 @@
-def sql_of(d):
-    return d.get("query") or " ".join(d.get("queryLines", []))
-
-# 1) show the SQL of the first two datasets
-for d in spec["datasets"][:2]:
-    print("=====", d.get("displayName"), "=====")
-    print(sql_of(d))
-    print()
-
-# 2) try running the first one (Net Sales)
-df = spark.sql(sql_of(spec["datasets"][0]))
-print("Rows:", df.count(), "| Columns:", df.columns)
-display(df)
+dbx = spark.sql("""
+  SELECT visual_id, row_order, row_label, col_sort, col_key,
+         geo_id, geo_name, period_week_label, cell_text, metric_status
+  FROM `wmt-hnw-pharmacy-catalog-prod`.trade_deck.v_slide_cells_display
+  WHERE week_choice = 'Latest'
+""")
+print("Total cells:", dbx.count())
+display(dbx.groupBy("visual_id").count().orderBy("visual_id"))
+display(dbx.filter("visual_id = 'p1_net_sales'").orderBy("row_order", "col_sort"))
