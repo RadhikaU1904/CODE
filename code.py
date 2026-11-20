@@ -113,6 +113,8 @@ def pbi_rows_from_text(pages):
                 if len(vals) >= 3 and owner:
                     owner[2] = True
                     out.append({"page": p, "name": owner[1], "key": raw(owner[1]), "vals": vals})
+                elif len(vals) >= 3:
+                    out.append({"page": p, "name": "", "key": "", "vals": vals})
                 continue
             m = ROW.search(line)
             if m:
@@ -123,7 +125,7 @@ def pbi_rows_from_text(pages):
     merged, i = [], 0
     while i < len(out):
         r, nx = out[i], out[i + 1] if i + 1 < len(out) else None
-        if nx and nx["page"] == r["page"] and nx["key"] == r["key"] and len(r["vals"]) <= 2 and len(nx["vals"]) >= 6:
+        if nx and r["key"] and nx["page"] == r["page"] and nx["key"] == r["key"] and len(r["vals"]) <= 2 and len(nx["vals"]) >= 6:
             merged.append({**r, "vals": r["vals"] + nx["vals"]}); i += 2
         else:
             merged.append(r); i += 1
@@ -234,17 +236,31 @@ def compare(dbx_rows, dbx_page1_lines, pbi_rows, pbi_pages):
                     if len(pv) < n or not type_ok(pv[:n], ty): continue
                     sc = sum(num(a) == num(b) for a, b in zip(d["vals"], pv[:n])) if d else 0
                     if best is None or (sc, -len(pv)) > best[0]: best = ((sc, -len(pv)), j, pv[:n])
+                found_by_values = False
+                if d and best is None:
+                    for j, r in enumerate(pbi_rows):
+                        if j in used_p or r["page"] != pp: continue
+                        pv = [v for v in r["vals"] if v != "NA"] if present else r["vals"]
+                        for o in range(len(pv) - n + 1):
+                            sc = sum(num(a) == num(b) for a, b in zip(d["vals"], pv[o:o + n]))
+                            if sc >= max(3, -(-n * 6 // 10)) and (best is None or sc > best[0][0]): best = ((sc, 0), j, pv[o:o + n]); found_by_values = True
                 if d: used_d.add(min(dc)[2])
                 if best: used_p.add(best[1])
                 for q, ci in enumerate(idx):
                     dv, pv = (d["vals"][q] if d else ""), (best[2][q] if best else "")
-                    if d and best: emit(table, label, cols[ci], dv, pv, *verdict(dv, pv, d["conf"][q]))
+                    if d and best:
+                        st, note = verdict(dv, pv, d["conf"][q])
+                        emit(table, label, cols[ci], dv, pv, st, note or ("Row name is unreadable in the Power BI PDF; row found by its values." if found_by_values else ""))
                     else: emit(table, label, cols[ci], dv, pv, CHECK, "Row not readable in the " + ("Databricks" if not d else "Power BI") + " PDF.")
             else:   # geo: 7 business units x 2 columns, different order in the two reports
                 dc = [(-dbx_name_ok(r["key"], names), j) for j, r in enumerate(dbx_rows) if j not in used_d and r["page"] == dp and dbx_name_ok(r["key"], names) and len(r["vals"]) >= 14]
                 d = dbx_rows[min(dc)[1]] if dc else None
                 pc = [(j, r) for j, r in enumerate(pbi_rows) if j not in used_p and r["page"] == pp and pbi_kind(r["key"], names) and len(r["vals"]) >= 12]
-                pj, p = pc[0] if pc else (None, None)
+                def geo_score(r):
+                    if not d: return 0
+                    mm = max(0, 14 - len(r["vals"]))
+                    return sum(num(d["vals"][BU_DBX.index(BU_PBI[q // 2]) * 2 + q % 2]) == num(r["vals"][q - mm]) for q in range(mm, 14))
+                pj, p = max(pc, key=lambda x: geo_score(x[1])) if pc else (None, None)
                 if d: used_d.add(min(dc)[1])
                 if p: used_p.add(pj)
                 m = max(0, 14 - len(p["vals"])) if p else 0          # Total cells sitting on top of the row name in the Power BI PDF
