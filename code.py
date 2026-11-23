@@ -59,6 +59,7 @@ TABLES = [
  ("Rx Delivery by Geography", 5, 4, "geo", ["Total", "WoW %"], None,
   ["Orders Delivered", "Orders Cancelled", "Cold Chain Orders", "RxD Scripts Count", "% RxD Penetration", "% Mixed Basket|% Mixed Basket (Delivered)", "Perfect Order Rate"]),
 ]
+HEADER_WORDS = {"week", "mtd", "qtd", "ytd", "actual", "total", "wow", "yoy", "vsly", "vsplan", "vslw", "comp", "compvsly"}   # column headers that can land on the same line as a row
 IGNORE_TEXT = ("beingvalidated", "previousstage")       # words inside a Databricks row that are not a row name
 LOW_CONF = 0.90                                          # below this, a difference is "Check manually", not "No match"
 CHECK = "Check manually"
@@ -82,7 +83,7 @@ def digits(v): return "".join(ch for ch in str(v) if ch in "0123456789.-")
 def type_ok(vals, types):
     if not types: return True
     for v, t in zip(vals, types):
-        if v == "NA": continue
+        if v in ("NA", "?"): continue
         if t == "$" and "$" not in v: return False
         if t == "%" and not v.endswith("%"): return False
         if t == "n" and ("$" in v or v.endswith("%")): return False
@@ -189,6 +190,22 @@ def split_piece(t):
 def ocr_value(t):
     p = split_piece(t)
     return p[0][1] if len(p) == 1 and p[0][0] == "val" else None
+ROT = {"W": "M", "M": "W", "6": "9", "9": "6", "S": "5", "5": "S", "'": ".", ":": ".", "*": ".", ".": ".", ",": ",",
+       "0": "0", "8": "8", "1": "1", "$": "$", "%": "%", "-": "-", "K": "K", "B": "B"}
+def unflip(x):
+    """the picture-reader sometimes reads a number upside down: "W6'6$" is really "$9.9M". Turn it back."""
+    s = "".join(ROT.get(ch, "#") for ch in reversed(x.replace(" ", "")))
+    return s if "#" not in s and any(c.isdigit() for c in s) and VALO.fullmatch(s) else None
+def pieces(t, s):
+    """one piece of text -> [(kind, text, confidence)], with upside-down numbers fixed and unreadable ones marked '?'"""
+    out = []
+    for kind, x in split_piece(t):
+        if kind == "name":
+            u = unflip(x)
+            if u: out.append(("val", u, min(s, 0.89))); continue
+            if sum(c.isalpha() for c in x) < 3 and any(c.isdigit() for c in x): out.append(("val", "?", 0.0)); continue
+        out.append((kind, x, s))
+    return out
 def ocr_lines(result, gap=25):
     """OCR result of one page -> lines of (text, confidence), top to bottom, left to right"""
     items = sorted((sum(p[1] for p in b) / 4, sum(p[0] for p in b) / 4, t, float(s)) for b, t, s in (result or []))
@@ -205,18 +222,19 @@ def dbx_rows_from_lines(pages_lines):
         for ln in lines:
             cur = None
             for t, s in ln:
-                for kind, x in split_piece(t):
+                for kind, x, cf in pieces(t, s):
                     if kind == "val":
-                        if cur: cur["vals"].append(x); cur["conf"].append(s)
+                        if cur: cur["vals"].append(x); cur["conf"].append(cf)
                         continue
                     k = raw(x)
                     if not k or any(w in k for w in IGNORE_TEXT): continue
+                    if cur is not None and k in HEADER_WORDS: continue          # a column header sitting inside a row
                     cur = {"page": p, "name": x, "key": k, "vals": [], "conf": []}; out.append(cur)
     return [r for r in out if r["vals"]]
 def dbx_kpis(lines):
     start = next((i for i, ln in enumerate(lines) if any(raw(t) == "hwmerchsales" for t, s in ln)), None)
     if start is None: return None
-    vl = [[(x, s) for t, s in ln for kind, x in split_piece(t) if kind == "val"] for ln in lines[start + 1:start + 7]]
+    vl = [[(x, cf) for t, s in ln for kind, x, cf in pieces(t, s) if kind == "val"] for ln in lines[start + 1:start + 7]]
     a = next((v for v in vl if len(v) >= 5), None)
     b = next((v for v in vl if len(v) >= 10 and v is not a), None)
     if not a or not b or len(a) != 6: return None
@@ -230,6 +248,7 @@ def dbx_kpis(lines):
 
 # ---------------- compare ----------------
 def verdict(d, p, conf=1.0):
+    if d == "?": return CHECK, "This Databricks number could not be read from the picture."
     if num(d) == num(p): return ("Match – style only" if p.endswith("pts") else "Match"), ""
     if conf < LOW_CONF: return CHECK, f"Databricks value was read from the picture with low confidence ({conf:.2f})."
     return "No match", ""
@@ -339,7 +358,9 @@ reads = {}
 for scale in (3, 4):
     lines = []
     for i in range(len(doc)):
-        result, _ = ocr(doc[i].render(scale=scale).to_numpy())
+        img = doc[i].render(scale=scale).to_numpy()
+        try: result = ocr(img, use_cls=False)[0]        # do not let it turn text upside down
+        except TypeError: result = ocr(img)[0]
         lines.append(ocr_lines(result, gap=25 * scale / 3))
     reads[scale] = lines
     print(f"Read at zoom {scale}: {sum(len(l) for pg in lines for l in pg)} pieces of text on {len(lines)} pages")
@@ -355,8 +376,8 @@ def merge_reads(r1, r2):
     for i in range(len(out)):
         a, b = r1.at[i, "Databricks"], r2.at[i, "Databricks"]
         if num(a) != num(b):
-            if not a and b:  out.loc[i] = r2.loc[i]                       # only the second read found the row
-            elif a and b:    out.at[i, "Match?"] = CHECK; out.at[i, "Note"] = f"The two reads of the Databricks PDF disagree ({a} / {b})."
+            if a in ("", "?") and b not in ("", "?"): out.loc[i] = r2.loc[i]      # only the second read got it
+            elif a not in ("", "?") and b not in ("", "?"): out.at[i, "Match?"] = CHECK; out.at[i, "Note"] = f"The two reads of the Databricks PDF disagree ({a} / {b})."
     return out
 res = merge_reads(*[compare(dbx_rows_from_lines(reads[s]), reads[s][0], pbi_rows, pbi_pages) for s in (3, 4)])
 
