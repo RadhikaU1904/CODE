@@ -161,9 +161,34 @@ def pbi_kpis(pages, page):
     return cards
 
 # ---------------- Databricks PDF (read as a picture, OCR) ----------------
+SYM = "▲▼↑↓△Δ"
+UNITV = r"-?\$?\d[\d,]*\.?\d*[KMB%]"
+def _multi(tok):
+    """one word -> list of values inside it ('-0.7%0.5%' -> two values), or None if it is not only values"""
+    s = tok.replace("−", "-").replace("–", "-").strip(SYM)
+    if not s: return []
+    out = []
+    for part in re.split(r"(?<=[\dKMB%])(?=[-$])", s):
+        if VALO.fullmatch(part): out.append(part)
+        elif re.fullmatch(rf"(?:{UNITV})+(?:-?\$?\d[\d,]*\.?\d*)?", part):
+            out += re.findall(rf"{UNITV}|-?\$?\d[\d,]*\.?\d*$", part)
+        else: return None
+    return [v for v in out if v]
+def split_piece(t):
+    """one piece of text read from the picture -> [('val', x) / ('name', x), ...] in reading order"""
+    toks = t.split()
+    a, pre = 0, []
+    while a < len(toks) and _multi(toks[a]) is not None: pre += _multi(toks[a]); a += 1
+    b, suf = len(toks), []
+    while b > a and _multi(toks[b - 1]) is not None: suf = _multi(toks[b - 1]) + suf; b -= 1
+    name = " ".join(toks[a:b])
+    while name and suf and re.fullmatch(r"\d{1,2}", suf[0]): name += suf.pop(0)        # 'GLP 1' stays a name
+    g = GLUED.match(name.replace(" ", "").replace("−", "-").replace("–", "-")) if name else None
+    if g and _multi(g.group(2)): name, suf = g.group(1), _multi(g.group(2)) + suf
+    return [("val", v) for v in pre] + ([("name", name)] if name else []) + [("val", v) for v in suf]
 def ocr_value(t):
-    s = t.replace(" ", "").replace("−", "-").replace("–", "-").lstrip("▲▼↑↓△").rstrip("△Δ▲")
-    return s if VALO.fullmatch(s) else None
+    p = split_piece(t)
+    return p[0][1] if len(p) == 1 and p[0][0] == "val" else None
 def ocr_lines(result, gap=25):
     """OCR result of one page -> lines of (text, confidence), top to bottom, left to right"""
     items = sorted((sum(p[1] for p in b) / 4, sum(p[0] for p in b) / 4, t, float(s)) for b, t, s in (result or []))
@@ -180,21 +205,18 @@ def dbx_rows_from_lines(pages_lines):
         for ln in lines:
             cur = None
             for t, s in ln:
-                v = ocr_value(t)
-                if v is not None:
-                    if cur: cur["vals"].append(v); cur["conf"].append(s)
-                    continue
-                glued = GLUED.match(t.replace(" ", "").replace("−", "-").replace("–", "-"))
-                if glued: t, first = glued.group(1), glued.group(2)
-                k = raw(t)
-                if not k or any(w in k for w in IGNORE_TEXT): continue
-                cur = {"page": p, "name": t, "key": k, "vals": [], "conf": []}; out.append(cur)
-                if glued: cur["vals"].append(first); cur["conf"].append(s)
+                for kind, x in split_piece(t):
+                    if kind == "val":
+                        if cur: cur["vals"].append(x); cur["conf"].append(s)
+                        continue
+                    k = raw(x)
+                    if not k or any(w in k for w in IGNORE_TEXT): continue
+                    cur = {"page": p, "name": x, "key": k, "vals": [], "conf": []}; out.append(cur)
     return [r for r in out if r["vals"]]
 def dbx_kpis(lines):
     start = next((i for i, ln in enumerate(lines) if any(raw(t) == "hwmerchsales" for t, s in ln)), None)
     if start is None: return None
-    vl = [[(ocr_value(t), s) for t, s in ln if ocr_value(t) is not None] for ln in lines[start + 1:start + 7]]
+    vl = [[(x, s) for t, s in ln for kind, x in split_piece(t) if kind == "val"] for ln in lines[start + 1:start + 7]]
     a = next((v for v in vl if len(v) >= 5), None)
     b = next((v for v in vl if len(v) >= 10 and v is not a), None)
     if not a or not b or len(a) != 6: return None
@@ -436,3 +458,20 @@ L += (["Mismatches:"] + [f"- {r['tab']}: {r['row']} – {r['column']} ({r['Datab
 L += ["", "The attached Excel has the detailed results by tab.", "", "Thanks,"]
 EMAIL = "\n".join(L); print(EMAIL)
 _ = open(os.path.join(OUT_DIR, f"Validation_email_{TODAY}.txt"), "w", encoding="utf-8").write(EMAIL)
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## Step 10: why is a row in "Check manually"?
+# MAGIC For each row the code could not read, this prints what the picture-reader saw near it. Send a photo of this if any row is still in Check manually.
+
+# COMMAND ----------
+todo = res[res["Match?"] == CHECK].drop_duplicates(["table", "row"])
+print("Rows still in Check manually:", len(todo))
+PAGE = {t[0]: t[1] for t in TABLES}
+for r in todo.to_dict("records"):
+    pg, key = PAGE[r["table"]], raw(r["row"])[:5]
+    want = {num(v) for v in res[(res["table"] == r["table"]) & (res["row"] == r["row"])]["Power BI"] if v}
+    print(f"\n=== {r['table']} / {r['row']} (Databricks PDF page {pg}) ===")
+    for ln in reads[3][pg - 1]:
+        if any(key in raw(t) or num(t.replace(" ", "")) in want for t, s in ln):
+            print("   ", " | ".join(f"{t} [{s:.2f}]" for t, s in ln))
