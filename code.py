@@ -1,31 +1,36 @@
-from pypdf import PdfReader
+Subject: H&W Weekly Trade Report Validation | Power BI vs Databricks | Week 42 (Nov 23, 2026)
 
-DBX_PDF = "PASTE DATABRICKS DASHBOARD PDF PATH"
-r = PdfReader(DBX_PDF)
-root = r.trailer["/Root"]
-print("Has accessibility tags:", "/StructTreeRoot" in root)
+Hi Team,
 
-pg = r.pages[0]
-annots = [a.get_object() for a in (pg.get("/Annots") or [])]
-print("Links on page 1:", len(annots))
-for a in annots[:12]:
-    info = {k: str(a[k])[:90] for k in ("/Contents", "/T", "/Alt", "/TU") if k in a}
-    uri = str(a["/A"].get("/URI"))[:150] if "/A" in a else ""
-    print(info, "| goes to:", uri)
+Attached is the Week 42 (full week, Nov 14 to Nov 20) validation comparing the H&W Weekly Trade Report in Power BI and Databricks as of Nov 23, 2026, about 10:10 AM CST.
 
-xo = pg["/Resources"].get("/XObject", {})
-print("Pictures on page 1:", sum(1 for k in xo if xo[k].get_object().get("/Subtype") == "/Image"))
-print("Fonts on page 1:", list(pg["/Resources"].get("/Font", {}).keys()))
+Overall, 99.3% of metrics are aligned between the two reports, with 868 metrics compared:
 
-found, todo, seen = [], [root.get("/StructTreeRoot")], 0
-while todo and seen < 20000:
-    o = todo.pop(); seen += 1
-    try: o = o.get_object()
-    except Exception: pass
-    if isinstance(o, dict):
-        for k in ("/Alt", "/ActualText"):
-            if k in o: found.append(str(o[k])[:60])
-        todo += [o[k] for k in ("/K",) if k in o]
-    elif isinstance(o, list):
-        todo += list(o)
-print("Hidden text pieces found:", len(found)); print(found[:40])
+- 849 Matches
+- 13 Style/formatting differences only
+- 6 Mismatches
+
+[Paste the chart image here]
+
+This is slightly below Friday's 99.7% (3 mismatches), because of three new differences.
+
+The 6 mismatches today:
+
+- Rx Delivery Penetration pts vs LY on the Executive Summary card (2.7 vs 2.85). Power BI shows 2.7 for the same metric on its other pages, so the Power BI card does not agree with its own tables. The gap is larger today.
+- New Rx Accounts vs LY, Week (16.7% vs 16.8%). Fourth validation day in a row with a 0.1 gap.
+- New Rx Accounts vs LY, MTD (18.1% vs 18.2%). Second day.
+- New RxD Patient, MTD Actual (129.8K vs 130.6K). New today.
+- New RxD Patient, MTD vs LY (27.7% vs 28.6%). New today.
+- Repeat RxD Patient, YTD YoY % (1139.3% vs 1139.4%). New today.
+
+All six need investigation. The New RxD Patient MTD gap (0.8K, almost 1 point) is too large to be rounding. Its Week and YTD values match, so only the MTD number is off.
+
+Still matching:
+
+- Store Wage per Script vs LY (-10.03% in both), so the Power BI fix is holding.
+- The Rx Delivery top-of-funnel stages (Order Ready Session and Add to Cart).
+
+The attached Excel file contains the detailed validation results by report tab, along with the summary chart and match percentages by tab.
+
+Thanks,
+Radhika
