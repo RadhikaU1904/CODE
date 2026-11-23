@@ -74,6 +74,7 @@ CHECK = "Check manually"
 VAL = r"(?:-?\$?\d[\d,]*\.?\d*[KMB%]?(?:\s(?:Δ|pts))?|NA)"
 ROW = re.compile(rf"((?:(?<!\d)% )?[A-Za-z][A-Za-z0-9 .&()/*%$-]*?)\s+((?:{VAL}(?:\s+|$)){{2,}})$")
 VALO = re.compile(r"-?\$?\d[\d,]*\.?\d*[KMB%]?|NA")
+GLUED = re.compile(r"^(.*[A-Za-z)%])((?:-\$?|\$)\d[\d,]*\.?\d*[KMB%]?|\d[\d,]*\.\d+[KMB%]?)$")
 def raw(s):    return re.sub(r"[^a-z0-9]", "", str(s).lower())
 def clean(v):  return re.sub(r"\s+", " ", str(v or "")).strip()
 def num(v):    return re.sub(r"[^0-9.$%KMB-]", "", str(v))
@@ -183,9 +184,12 @@ def dbx_rows_from_lines(pages_lines):
                 if v is not None:
                     if cur: cur["vals"].append(v); cur["conf"].append(s)
                     continue
+                glued = GLUED.match(t.replace(" ", "").replace("−", "-").replace("–", "-"))
+                if glued: t, first = glued.group(1), glued.group(2)
                 k = raw(t)
                 if not k or any(w in k for w in IGNORE_TEXT): continue
                 cur = {"page": p, "name": t, "key": k, "vals": [], "conf": []}; out.append(cur)
+                if glued: cur["vals"].append(first); cur["conf"].append(s)
     return [r for r in out if r["vals"]]
 def dbx_kpis(lines):
     start = next((i for i, ln in enumerate(lines) if any(raw(t) == "hwmerchsales" for t, s in ln)), None)
@@ -240,6 +244,11 @@ def compare(dbx_rows, dbx_page1_lines, pbi_rows, pbi_pages):
                     sc = sum(num(a) == num(b) for a, b in zip(d["vals"], pv[:n])) if d else 0
                     if best is None or (sc, -len(pv)) > best[0]: best = ((sc, -len(pv)), j, pv[:n])
                 found_by_values = False
+                if d is None and best is not None:
+                    cand = [(sum(num(a) == num(b) for a, b in zip(r["vals"][:n], best[2])), j) for j, r in enumerate(dbx_rows)
+                            if j not in used_d and r["page"] == dp and len(r["vals"]) >= n]
+                    if cand and max(cand)[0] >= max(3, -(-n * 6 // 10)):
+                        dc = [(0, 0, max(cand)[1])]; d = dbx_rows[dc[0][2]]; found_by_values = "Databricks"
                 if d and best is None:
                     for j, r in enumerate(pbi_rows):
                         if j in used_p or r["page"] != pp: continue
@@ -253,7 +262,7 @@ def compare(dbx_rows, dbx_page1_lines, pbi_rows, pbi_pages):
                     dv, pv = (d["vals"][q] if d else ""), (best[2][q] if best else "")
                     if d and best:
                         st, note = verdict(dv, pv, d["conf"][q])
-                        emit(table, label, cols[ci], dv, pv, st, note or ("Row name is unreadable in the Power BI PDF; row found by its values." if found_by_values else ""))
+                        emit(table, label, cols[ci], dv, pv, st, note or ((f"Row name is unreadable in the {found_by_values if isinstance(found_by_values, str) else 'Power BI'} PDF; row found by its values." if found_by_values else "")))
                     else: emit(table, label, cols[ci], dv, pv, CHECK, "Row not readable in the " + ("Databricks" if not d else "Power BI") + " PDF.")
             else:   # geo: 7 business units x 2 columns, different order in the two reports
                 dc = [(-dbx_name_ok(r["key"], names), j) for j, r in enumerate(dbx_rows) if j not in used_d and r["page"] == dp and dbx_name_ok(r["key"], names) and len(r["vals"]) >= 14]
@@ -406,7 +415,7 @@ for xi, (tab, r) in enumerate(by_tab.iterrows()):
     bx.text(xi, -17, f"{r['Match']} match\n{r['Match – style only']} style only\n{r['No match']} no match\n{r[CHECK]} to check", ha="center", va="top", fontsize=9.5, color=MUTED, linespacing=1.4)
 bx.set_xlim(-0.6, len(by_tab) - 0.4); bx.set_ylim(0, 100); bx.axis("off")
 bx.set_title("By tab", fontsize=15, fontweight="bold", color=INK, pad=34)
-fig.legend(handles=[Patch(color=c, label=l) for c, l in zip(COL, ORDER)], loc="upper right", bbox_to_anchor=(0.99, 0.905), frameon=False, fontsize=12, labelcolor=INK, ncol=4)
+fig.legend(handles=[Patch(color=c, label=l) for c, l in zip(COL, ORDER)], loc="lower right", bbox_to_anchor=(0.99, 0.015), frameon=False, fontsize=12, labelcolor=INK, ncol=4)
 fig.text(0.03, 0.93, f"{REPORT} (Power BI vs Databricks)", fontsize=20, fontweight="bold", color=INK)
 fig.text(0.03, 0.875, f"As of {now.strftime('%b %d, %Y %I:%M %p')}  ·  {WEEK}  ·  Power BI updated {PBI_TIME}", fontsize=11, color=MUTED)
 fig.text(0.03, 0.03, "Automated PDF vs PDF check of tables and KPI cards. Charts and maps are not included.", fontsize=10, color=MUTED)
@@ -426,4 +435,4 @@ mm = res[res["Match?"] == "No match"].to_dict("records")
 L += (["Mismatches:"] + [f"- {r['tab']}: {r['row']} – {r['column']} ({r['Databricks']} vs {r['Power BI']})" for r in mm]) if mm else ["No mismatches today."]
 L += ["", "The attached Excel has the detailed results by tab.", "", "Thanks,"]
 EMAIL = "\n".join(L); print(EMAIL)
-open(os.path.join(OUT_DIR, f"Validation_email_{TODAY}.txt"), "w", encoding="utf-8").write(EMAIL)
+_ = open(os.path.join(OUT_DIR, f"Validation_email_{TODAY}.txt"), "w", encoding="utf-8").write(EMAIL)
