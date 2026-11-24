@@ -31,7 +31,9 @@ def split_piece(t):
     return ("name", t)
 def to_lines(result, gap=None):
     """group pieces into lines: a piece joins a line only if it sits at the same height as that line's first piece
-       (half a text-height apart at most), so two table rows that are close together are never glued into one"""
+       (half a text-height apart at most), so two table rows that are close together are never glued into one.
+       Then a line that has only numbers (no name) is joined to the closest line just above or below that has a name,
+       if their numbers sit in different columns - this catches numbers printed a little higher or lower than their name."""
     items = []
     for b, t, s in (result or []):
         ys, xs = [p[1] for p in b], [p[0] for p in b]
@@ -43,6 +45,22 @@ def to_lines(result, gap=None):
             lines[-1][2].append((x, t, s))
         else:
             lines.append([y, h, [(x, t, s)]])
+    has_name = lambda ln: any((split_piece(t) or ("vals",))[0] != "vals" for x, t, s in ln[2])
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
+        if not has_name(ln):
+            best = None
+            for j in (i - 1, i + 1):
+                if 0 <= j < len(lines) and has_name(lines[j]):
+                    d = abs(lines[j][0] - ln[0])
+                    free = all(abs(x - x2) > 0.6 * ln[1] * 4 for x, _, _ in ln[2] for x2, _, _ in lines[j][2])
+                    if d <= 1.2 * max(ln[1], lines[j][1]) and free and (best is None or d < best[1]): best = (j, d)
+            if best:
+                lines[best[0]][2] += ln[2]; lines.pop(i)
+                if best[0] < i: continue
+                continue
+        i += 1
     return [[(t, s) for x, t, s in sorted(ln[2])] for ln in lines]
 def rows_from_lines(lines, page):
     rows = []
