@@ -23,7 +23,8 @@ NUMS = re.compile(rf"(?:{ONE})(?:\s*(?:Δ|△|pts))?")
 def split_piece(t):
     """one piece of text from the picture -> ('name', text) or ('vals', [numbers])"""
     t = t.replace("−", "-").replace("–", "-").strip(" ▲▼↑↓")
-    t = re.sub(r"(-?\d+\.\d+)\s?[AΔ△](?=\s|$)", r"\1 Δ", t)            # the picture often reads the Δ sign as 'A': '2.9A' -> '2.9 Δ'
+    t = re.sub(r"(-?\d+\.\d+)\s?[AΔ△∆±]+(?=\s|$)", r"\1 Δ", t)       # the picture reads the Δ sign as 'A' or '±': '2.9A', '3.5 ±' -> '2.9 Δ'
+    t = re.sub(r"(\d[KMB%]?)\s?[^\w\s$%.,()\-Δ]+(?=\s|$)", r"\1", t)       # any other stray symbol right after a number is dropped            # the picture often reads the Δ sign as 'A': '2.9A' -> '2.9 Δ'
     if not t: return None
     if re.fullmatch(rf"(?:(?:{ONE})\s*(?:Δ|△|pts)?\s*)+", t): return ("vals", [m.strip() for m in NUMS.findall(t)])
     m = re.match(rf"^(.*?[A-Za-z)%$])\s+((?:(?:{ONE})\s*(?:Δ|△|pts)?\s*)+)$", t)       # 'Pharmacy $406.3M -$1.9M' read as one piece
@@ -95,7 +96,8 @@ width = max((len(r["vals"]) for r in rows), default=0)
 for r in rows:
     v, c = r.pop("vals"), r.pop("conf")
     r["How many"] = len(v); r["Lowest confidence"] = round(min(c), 2) if c else None
-    r["Kind"] = "Table row" if r["Name"] and len(v) >= 2 else ("Text only" if not v else "Other number")
+    one_letter = bool(r["Name"]) and re.fullmatch(r"[A-Za-z]", r["Name"].split()[0]) is not None    # map labels like 'R 52' are not metrics
+    r["Kind"] = "Table row" if r["Name"] and len(v) >= 2 and not one_letter else ("Text only" if not v else "Other number")
     for k in range(width): r[f"Value {k+1}"] = v[k] if k < len(v) else ""
 df = pd.DataFrame(rows)
 metrics = df[df["Kind"] == "Table row"]
