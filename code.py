@@ -105,7 +105,7 @@ def extract_pdf(path):
         ints = [int(v) for v in vals if re.fullmatch(r"\d{1,3}", v)]
         axis = len(ints) == n and n >= 3 and all(b - a == 1 for a, b in zip(ints, ints[1:]))      # 32 33 34 ... = chart axis
         label = n == 1 and len(ints) == 1 and bool(r["Name"])                                    # 'Week 43', 'R 53' = a label, not a metric
-        short = bool(r["Name"]) and len(re.sub(r"[^A-Za-z]", "", r["Name"].split()[0])) < 2 and len(r["Name"].split()[0]) < 3   # map labels 'R 54 ...'
+        short = bool(r["Name"]) and re.fullmatch(r"[A-Za-z]", r["Name"].split()[0]) is not None   # map labels 'R 54 ...'
         if axis or label or short: r["Name"], r["Text above"], r["Note"] = "", "", ""
         if r["Name"] and n >= 2:                         r["Kind"] = "Table row"
         elif r["Name"]:                                  r["Kind"] = "Name with one number"
