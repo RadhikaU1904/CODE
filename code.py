@@ -48,9 +48,16 @@ def fix_name(name):
     """returns (name, note). If the name was printed twice on top of itself, un-double it. If it still looks broken, say so."""
     fixed = unshuffle(name.replace(" ", ""))
     if fixed and len(fixed) >= 3: return fixed, "name was doubled in the PDF, fixed"
-    parts = [w for w in re.split(r"[ ./()-]+", name) if w]
-    odd = any(re.search(r"[a-z][A-Z]", w) and not w.startswith("Rx") for w in parts) \
-          or any(re.search(r"[a-z]\d|\d[a-z]|\$\d|\d\$", w) for w in parts)
+    def bad(tok):
+        parts = [w for w in re.split(r"[./()-]+", tok) if w]
+        return any(re.search(r"[a-z][A-Z]", w) and not w.startswith("Rx") for w in parts) \
+               or any(re.search(r"[a-z]\d|\d[a-z]|\$\d|\d\$", w) for w in parts)
+    toks = name.split()
+    first_bad = next((i for i, t in enumerate(toks) if bad(t)), None)
+    odd = first_bad is not None
+    if odd and first_bad >= 2:          # 'Rx Merch Sales ($) R$x4 M06e...' -> keep the clean start
+        if first_bad >= 3 and toks[first_bad - 1] == toks[0]: first_bad -= 1     # the second copy of the name had started
+        return " ".join(toks[:first_bad]), "name was partly jumbled in the PDF, kept the clean part - the first number of this row may be missing"
     return name, ("name looks jumbled in the PDF - check" if odd else "")
 
 def extract_page(text, page):
@@ -94,7 +101,12 @@ def extract_pdf(path):
     width = max((len(r["vals"]) for r in rows), default=0)
     for r in rows:
         for i in range(width): r[f"Value {i+1}"] = r["vals"][i] if i < len(r["vals"]) else ""
-        n = len(r.pop("vals")); r["How many"] = n
+        vals = r.pop("vals"); n = len(vals); r["How many"] = n
+        ints = [int(v) for v in vals if re.fullmatch(r"\d{1,3}", v)]
+        axis = len(ints) == n and n >= 3 and all(b - a == 1 for a, b in zip(ints, ints[1:]))      # 32 33 34 ... = chart axis
+        label = n == 1 and len(ints) == 1 and bool(r["Name"])                                    # 'Week 43', 'R 53' = a label, not a metric
+        short = bool(r["Name"]) and len(re.sub(r"[^A-Za-z]", "", r["Name"].split()[0])) < 2 and len(r["Name"].split()[0]) < 3   # map labels 'R 54 ...'
+        if axis or label or short: r["Name"], r["Text above"], r["Note"] = "", "", ""
         if r["Name"] and n >= 2:                         r["Kind"] = "Table row"
         elif r["Name"]:                                  r["Kind"] = "Name with one number"
         elif r["Text above"] and (n >= 3 or r["Note"].startswith("labels")): r["Kind"] = "Numbers under a heading"
