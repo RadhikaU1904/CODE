@@ -94,39 +94,46 @@ def extract_pdf(path):
     width = max((len(r["vals"]) for r in rows), default=0)
     for r in rows:
         for i in range(width): r[f"Value {i+1}"] = r["vals"][i] if i < len(r["vals"]) else ""
-        r["How many"] = len(r.pop("vals"))
-    cols = ["Page", "Line", "Text above", "Name", "How many"] + [f"Value {i+1}" for i in range(width)] + ["Note"]
+        n = len(r.pop("vals")); r["How many"] = n
+        if r["Name"] and n >= 2:                         r["Kind"] = "Table row"
+        elif r["Name"]:                                  r["Kind"] = "Name with one number"
+        elif r["Text above"] and (n >= 3 or r["Note"].startswith("labels")): r["Kind"] = "Numbers under a heading"
+        else:                                            r["Kind"] = "Loose number (chart label)"
+        if r["Kind"] == "Loose number (chart label)":    r["Note"] = ""
+    cols = ["Page", "Line", "Kind", "Text above", "Name", "How many"] + [f"Value {i+1}" for i in range(width)] + ["Note"]
     return pd.DataFrame(rows, columns=cols), pd.DataFrame(texts, columns=["Page", "Line", "Text"]), empty
 
 # COMMAND ----------
 
 # STEP 3 - read the PDF
 rows, texts, empty = extract_pdf(PDF_PATH)
-pages = int(max(rows["Page"].max() if len(rows) else 0, texts["Page"].max() if len(texts) else 0))
-print(f"Pages read: {pages}   |   rows with numbers: {len(rows)}   |   numbers found: {int(rows['How many'].sum())}   |   text lines: {len(texts)}")
-if empty: print(f"WARNING: page(s) {empty} have no text. That page is a picture, so this code cannot read it.")
-print(rows.groupby("Page").agg(Rows=("Name", "size"), Numbers=("How many", "sum"), To_check=("Note", lambda s: (s != "").sum())).to_string())
+metrics = rows[rows["Kind"] != "Loose number (chart label)"]          # tables and KPI cards
+loose   = rows[rows["Kind"] == "Loose number (chart label)"]          # chart labels, axis numbers
+print(f"Metric rows (tables and cards): {len(metrics)}  with {int(metrics['How many'].sum())} numbers   |   loose chart numbers: {int(loose['How many'].sum())}   |   text lines: {len(texts)}")
+if empty: print(f"NOTE: page(s) {empty} have almost no text (a picture or an empty page).")
+print(rows.groupby(["Page", "Kind"]).agg(Rows=("Name", "size"), Numbers=("How many", "sum")).to_string())
 
 # COMMAND ----------
 
-# STEP 4 - look at one page (change the number to see another page)
+# STEP 4 - look at one page: only the metric rows (change the number to see another page)
 SHOW_PAGE = 1
 pd.set_option("display.max_rows", 500, "display.max_columns", 50, "display.width", 250, "display.max_colwidth", 45)
-display(rows[rows["Page"] == SHOW_PAGE].drop(columns=["Note"]))
+display(metrics[metrics["Page"] == SHOW_PAGE].drop(columns=["Note"]))
 
 # COMMAND ----------
 
-# STEP 5 - rows the code is not sure about
-display(rows[rows["Note"] != ""][["Page", "Line", "Name", "Value 1", "Note"]])
+# STEP 5 - metric rows the code is not sure about
+display(metrics[metrics["Note"] != ""][["Page", "Line", "Kind", "Name", "Value 1", "Note"]])
 
 # COMMAND ----------
 
-# STEP 6 - save one Excel: a tab for every page + a tab with all other text
+# STEP 6 - save one Excel
 TODAY = datetime.date.today().isoformat()
 out = f"{OUT_DIR}/PDF_extract_{TODAY}.xlsx"
 with pd.ExcelWriter(out, engine="openpyxl") as xl:
-    rows.to_excel(xl, sheet_name="All pages", index=False)
-    for p in sorted(rows["Page"].unique()):
-        rows[rows["Page"] == p].to_excel(xl, sheet_name=f"Page {p}", index=False)
+    metrics.to_excel(xl, sheet_name="Metrics - all pages", index=False)
+    for p in sorted(metrics["Page"].unique()):
+        metrics[metrics["Page"] == p].to_excel(xl, sheet_name=f"Page {p}", index=False)
+    loose.to_excel(xl, sheet_name="Chart numbers", index=False)
     texts.to_excel(xl, sheet_name="Other text", index=False)
 print("Saved:", out)
