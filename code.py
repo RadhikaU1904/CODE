@@ -23,20 +23,27 @@ NUMS = re.compile(rf"(?:{ONE})(?:\s*(?:Δ|△|pts))?")
 def split_piece(t):
     """one piece of text from the picture -> ('name', text) or ('vals', [numbers])"""
     t = t.replace("−", "-").replace("–", "-").strip(" ▲▼↑↓")
+    t = re.sub(r"(-?\d+\.\d+)\s?[AΔ△](?=\s|$)", r"\1 Δ", t)            # the picture often reads the Δ sign as 'A': '2.9A' -> '2.9 Δ'
     if not t: return None
     if re.fullmatch(rf"(?:(?:{ONE})\s*(?:Δ|△|pts)?\s*)+", t): return ("vals", [m.strip() for m in NUMS.findall(t)])
     m = re.match(rf"^(.*?[A-Za-z)%$])\s+((?:(?:{ONE})\s*(?:Δ|△|pts)?\s*)+)$", t)       # 'Pharmacy $406.3M -$1.9M' read as one piece
     if m and any(c.isdigit() for c in m.group(2)): return ("both", m.group(1).strip(), [x.strip() for x in NUMS.findall(m.group(2))])
     return ("name", t)
-def to_lines(result, gap):
-    """group the pieces that sit on the same height into one line, left to right"""
-    items = sorted((sum(p[1] for p in b) / 4, sum(p[0] for p in b) / 4, t, float(s)) for b, t, s in (result or []))
-    lines, cur, last = [], [], None
-    for y, x, t, s in items:
-        if last is not None and y - last > gap: lines.append(cur); cur = []
-        cur.append((x, t, s)); last = y
-    if cur: lines.append(cur)
-    return [[(t, s) for x, t, s in sorted(ln)] for ln in lines]
+def to_lines(result, gap=None):
+    """group pieces into lines: a piece joins a line only if it sits at the same height as that line's first piece
+       (half a text-height apart at most), so two table rows that are close together are never glued into one"""
+    items = []
+    for b, t, s in (result or []):
+        ys, xs = [p[1] for p in b], [p[0] for p in b]
+        items.append((sum(ys) / 4, sum(xs) / 4, max(ys) - min(ys), t, float(s)))
+    items.sort()
+    lines = []                                   # each line: [anchor_y, height, [(x, t, s)]]
+    for y, x, h, t, s in items:
+        if lines and abs(y - lines[-1][0]) <= 0.5 * max(h, lines[-1][1]):
+            lines[-1][2].append((x, t, s))
+        else:
+            lines.append([y, h, [(x, t, s)]])
+    return [[(t, s) for x, t, s in sorted(ln[2])] for ln in lines]
 def rows_from_lines(lines, page):
     rows = []
     for n, ln in enumerate(lines, 1):
@@ -64,7 +71,7 @@ for i in range(len(doc)):
     img = doc[i].render(scale=SCALE).to_numpy()
     try: result = ocr(img, use_cls=False)[0]
     except TypeError: result = ocr(img)[0]
-    lines = to_lines(result, gap=25 * SCALE / 3)
+    lines = to_lines(result)
     all_lines.append(lines); rows += rows_from_lines(lines, i + 1)
 width = max((len(r["vals"]) for r in rows), default=0)
 for r in rows:
