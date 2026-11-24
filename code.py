@@ -96,7 +96,7 @@ width = max((len(r["vals"]) for r in rows), default=0)
 for r in rows:
     v, c = r.pop("vals"), r.pop("conf")
     r["How many"] = len(v); r["Lowest confidence"] = round(min(c), 2) if c else None
-    one_letter = bool(r["Name"]) and re.fullmatch(r"[A-Za-z]", r["Name"].split()[0]) is not None    # map labels like 'R 52' are not metrics
+    one_letter = bool(r["Name"]) and re.fullmatch(r"[A-Za-z]\s?\d*", r["Name"].strip()) is not None    # map labels like 'R 52' or 'R56' are not metrics
     r["Kind"] = "Table row" if r["Name"] and len(v) >= 2 and not one_letter else ("Text only" if not v else "Other number")
     for k in range(width): r[f"Value {k+1}"] = v[k] if k < len(v) else ""
 df = pd.DataFrame(rows)
