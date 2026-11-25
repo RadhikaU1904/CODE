@@ -1,39 +1,65 @@
-Subject: H&W Weekly Trade Report – Power BI vs Databricks validation (Week 43 WTD, as of Nov 25, 11:35 AM)
+# %pip install openpyxl   <- run this first in its own cell if you get 'No module named openpyxl'
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 
-Hi Team,
+# ---- change only these 3 lines each day ----
+path  = "/Workspace/Users/your.name/Dashboard_vs_PowerBI_W43_Nov25_2026.xlsx"   # right-click the file > Copy path
+as_of = "Nov 25, 2026, 11:35 AM"
+week  = "Week 43 WTD (Nov 21 – Nov 24, 2026 · 4 of 7 days)"
 
-Please find today's validation of the H&W Weekly Trade Report, Databricks dashboard vs Power BI.
+tabs = ["Executive Summary", "Sales & Volume", "Category & Operations", "Geography", "Rx Delivery"]
+labels = ["Match", "Match – style only", "No match"]
+colors = ["#2E9E5B", "#E8A93B", "#D64545"]          # green, amber, red
+INK, MUTED = "#1A1A1A", "#6B7280"
 
-As of: Wednesday, Nov 25, 2026, 11:35 AM CST
-Week shown: Week 43 WTD (Sat Nov 21 – Tue Nov 24, 2026, 4 of 7 days)
+def count(df):
+    c = df["Match?"].value_counts()
+    return [int(c.get(k, 0)) for k in labels]
 
-Overall
-- 868 numbers compared across the 5 tabs
-- 852 match, 13 match in value with a style difference only ($ sign or Δ)
-- 3 do not match
-- Overall match: 99.7%
+per_tab = {t: count(pd.read_excel(path, sheet_name=t)) for t in tabs}
+overall = [sum(v[i] for v in per_tab.values()) for i in range(3)]
+total = sum(overall)
+same = (overall[0] + overall[1]) / total * 100
 
-By tab
-- Executive Summary: 108 compared, 1 no match (99.1%)
-- Sales & Volume: 158 compared, 2 no match (98.7%)
-- Category & Operations: 229 compared, 0 no match (100%)
-- Geography: 161 compared, 0 no match (100%)
-- Rx Delivery: 212 compared, 0 no match (100%)
+fig = plt.figure(figsize=(15, 7.6))
+fig.patch.set_facecolor("white")
+gs = fig.add_gridspec(1, 2, width_ratios=[1, 1.25], left=0.02, right=0.97, top=0.74, bottom=0.30, wspace=0.12)
 
-Numbers that do not match (Databricks vs Power BI)
-1. Executive Summary – Rx Delivery Penetration, pts vs LY (KPI card): 2.7 vs 2.66
-2. Sales & Volume – New Rx Accounts, vs LY (Week): 14.7% vs 14.8%
-3. Sales & Volume – GMV Delivered, vs LY (MTD): 84.6% vs 84.5% (new today)
+# ---- left: pie (donut) for overall ----
+ax = fig.add_subplot(gs[0, 0])
+ax.pie(overall, colors=colors, startangle=90, counterclock=False,
+       wedgeprops=dict(width=0.34, edgecolor="white", linewidth=3))
+ax.text(0, 0, f"{same:.1f}%", ha="center", va="center", fontsize=38, fontweight="bold", color=INK)
+ax.set_title("Overall (all tabs)", fontsize=15, fontweight="bold", color=INK, pad=10)
+ax.text(0, -1.20, f"{overall[0]} match · {overall[1]} style only · {overall[2]} no match",
+        ha="center", va="top", fontsize=12, color=MUTED)
+ax.text(0, -1.38, f"{total} numbers compared", ha="center", va="top", fontsize=11, color=MUTED)
 
-The KPI card has differed on every validation day since Nov 16. The New Rx Accounts row has shown a 0.1 pt gap since Nov 18.
+# ---- right: one vertical bar graph for all tabs ----
+bx = fig.add_subplot(gs[0, 1])
+for xi, t in enumerate(tabs):
+    v = per_tab[t]; n = sum(v); bottom = 0
+    for val, col in zip(v, colors):
+        h = val / n * 100
+        if h > 0:
+            bx.bar(xi, h, bottom=bottom, color=col, width=0.6, edgecolor="white", linewidth=2)
+        bottom += h
+    bx.text(xi, 102, f"{(v[0] + v[1]) / n * 100:.1f}%", ha="center", va="bottom",
+            fontsize=14, fontweight="bold", color=INK)
+    bx.text(xi, -4, t.replace(" & ", " &\n"), ha="center", va="top", fontsize=12, color=INK)
+    bx.text(xi, -17, f"{v[0]} match\n{v[1]} style only\n{v[2]} no match",
+            ha="center", va="top", fontsize=9.5, color=MUTED, linespacing=1.4)
+bx.set_xlim(-0.6, len(tabs) - 0.4); bx.set_ylim(0, 100); bx.axis("off")
+bx.set_title("By tab", fontsize=15, fontweight="bold", color=INK, pad=34)
 
-Changes since yesterday (Nov 24)
-- New Rx Accounts, vs LY (MTD) now matches (17.6% on both).
-- GMV Delivered, vs LY (MTD) is a new 0.1 pt difference (both showed 85.4% yesterday).
-
-Note: the Rx Delivery funnel top two stages (Order Ready Session, Add to Cart) match as of 11:35 AM. Databricks still shows them as 'being validated'.
-
-The Excel with all details (one tab per report page) and the summary chart are attached.
-
-Thanks,
-Radhika
+fig.legend(handles=[Patch(color=c, label=l) for c, l in zip(colors, labels)], loc="upper right",
+           bbox_to_anchor=(0.99, 0.905), frameon=False, fontsize=12, labelcolor=INK, ncol=3)
+fig.text(0.03, 0.93, "Health and Wellness Weekly Trade Report (Power BI vs Databricks)", fontsize=20, fontweight="bold", color=INK)
+fig.text(0.03, 0.875, f"As of {as_of}  ·  {week}", fontsize=13, color=MUTED)
+fig.text(0.03, 0.03, "Style only = same number, different look ($ sign or Δ).  "
+         f"{overall[2]} numbers differ today; details are in the Excel.", fontsize=10, color=MUTED)
+out = path.rsplit("/", 1)[0] + "/Validation_Chart.png"      # saved next to the Excel
+plt.savefig(out, dpi=140)
+print("Saved:", out)
+plt.show()
